@@ -1,0 +1,21 @@
+{
+  "experiment": "v0.5_three_plane_reference",
+  "planes": ["axial", "coronal", "sagittal"],
+  "slices": 9,
+  "resolution": 128,
+  "epochs": 20,
+  "batch_size": 8,
+  "accumulation_steps": 1,
+  "learning_rate": 0.001,
+  "weight_decay": 0.0001,
+  "dropout": 0.2,
+  "seeds": [0, 1, 2],
+  "num_workers": 2,
+  "rotation_degrees": 7.0,
+  "translation_fraction": 0.05,
+  "contrast_fraction": 0.1,
+  "threshold": 0.5,
+  "expected_train": 1130,
+  "expected_valid": 120,
+  "reference_manifest_sha256": "40ec7d490c5a36f81761079230c806ecaa68ee80bd807f152611810b34784df5"
+}

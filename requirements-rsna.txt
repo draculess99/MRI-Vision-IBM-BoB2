@@ -1,0 +1,3 @@
+# RSNA metadata adapter and optional DICOM training path.
+-r requirements-cnn.txt
+pandas>=2.0,<3

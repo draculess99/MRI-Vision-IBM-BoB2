@@ -1,0 +1,4 @@
+# Optional: install the appropriate CPU/CUDA PyTorch build for your platform.
+# V0.4 requirements remain unchanged.
+-r requirements.txt
+torch>=2.6,<3

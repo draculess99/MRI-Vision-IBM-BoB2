@@ -1,0 +1,37 @@
+.venv/
+venv/
+__pycache__/
+*.pyc
+.env
+outputs/*
+!outputs/.gitkeep
+
+data/
+datasets/
+
+*.dcm
+*.nii
+*.nii.gz
+*.npy
+
+
+models/*.pt
+models/*.pth
+models/*.onnx
+
+# External Stanford source labels (synthetic fixtures are generated at test time).
+train_abnormal.csv
+train_acl.csv
+train_meniscus.csv
+valid_abnormal.csv
+valid_acl.csv
+valid_meniscus.csv
+.venv-cnn/
+
+# RSNA Knee source metadata/images and derived artifacts.
+data/rsna-knee/
+**/train_series/
+**/test_series/
+checkpoints/
+outputs/rsna-knee/
+submission.csv

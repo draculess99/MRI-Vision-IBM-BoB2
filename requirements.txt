@@ -1,0 +1,8 @@
+streamlit
+opencv-python-headless
+numpy
+Pillow
+pytest
+pydicom
+nibabel
+scikit-learn>=1.5,<2
