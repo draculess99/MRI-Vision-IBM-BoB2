@@ -448,14 +448,57 @@ if volume is not None:
                                 "Resolve the image-quality issue and reload the study."
                             )
                         else:
-                            status_icons = {
-                                ComparisonStatus.STABLE: "🟢 STABLE",
-                                ComparisonStatus.REVIEW: "🟡 REVIEW",
-                            }
-                            st.metric(
-                                "Comparison status",
-                                status_icons[comparison.status],
+                            # ---- Clinical Review Summary card ---------------
+                            # Status is derived solely from the deterministic
+                            # comparison thresholds and quality gates in
+                            # mri_core/comparison.py — no model output is used.
+                            is_stable = comparison.status == ComparisonStatus.STABLE
+                            if is_stable:
+                                card_bg   = "#d4edda"
+                                card_border = "#28a745"
+                                status_label = "🟢 STABLE"
+                                summary_sentence = (
+                                    "No image-derived change candidates exceeded "
+                                    "the configured review thresholds."
+                                )
+                            else:
+                                card_bg   = "#fff3cd"
+                                card_border = "#e0a800"
+                                status_label = "🟡 REVIEW"
+                                # Condense reason strings to their opening clause
+                                # (everything before the first period or the full
+                                # string if no period found).
+                                short_reasons = []
+                                for r in comparison.reasons:
+                                    clause = r.split(".")[0].strip()
+                                    short_reasons.append(clause)
+                                summary_sentence = "; ".join(short_reasons) + "."
+
+                            st.markdown(
+                                f"""
+<div style="
+    background:{card_bg};
+    border-left:5px solid {card_border};
+    border-radius:6px;
+    padding:1rem 1.25rem;
+    margin-bottom:1rem;
+    color:#111827;
+">
+  <p style="font-size:1.15rem;font-weight:700;margin:0 0 0.35rem 0;color:#111827;">
+    Clinical Review Summary &nbsp;—&nbsp; {status_label}
+  </p>
+  <p style="margin:0 0 0.4rem 0;font-size:0.95rem;color:#111827;">
+    {summary_sentence}
+  </p>
+  <p style="margin:0;font-size:0.85rem;font-weight:700;color:#111827;">
+    Status derived from deterministic comparison thresholds and image-quality
+    gates only. &nbsp;Non-diagnostic; clinician review required.
+  </p>
+</div>
+""",
+                                unsafe_allow_html=True,
                             )
+                            # -------------------------------------------------
 
                             if comparison.reasons:
                                 st.markdown("**Change candidates requiring clinician review:**")
