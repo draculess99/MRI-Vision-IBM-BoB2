@@ -15,6 +15,7 @@ from mri_core.rsna_integration import (
 from mri_core.decision import generate_decision_report
 from mri_core.rsna_knee_inference import run_inference, RSNAInferenceError
 from mri_core.rsna_knee_ensemble import run_ensemble_inference
+from mri_core.comparison import generate_comparison_report, ComparisonStatus
 
 # Checkpoint location matches configs/rsna_knee.json's "checkpoint_path". No checkpoint
 # is expected to exist yet; the RSNA viewer remains fully usable without one.
@@ -80,6 +81,12 @@ decision_report = None
 study_metadata = {}
 use_ensemble_inference = False
 use_smoke_checkpoint = False
+# Prior-study state (RSNA comparison only)
+prior_volume = None
+prior_study_metadata = {}
+prior_results = None
+prior_decision_report = None
+selected_prior_study = None
 
 if data_source == "Upload File":
     uploaded_file = st.sidebar.file_uploader(
@@ -133,8 +140,35 @@ elif data_source == "Explore RSNA Studies":
                     st.sidebar.warning(str(e))
                 except Exception as e:
                     st.sidebar.error(f"Error loading series: {e}")
+
             else:
                 st.sidebar.info(f"No planes available yet for study {selected_study}. Download in progress?")
+
+            # ---- Prior Study selector (ChangeGuard) -------------------------
+            # Exclude the currently selected study so a study cannot be compared
+            # against itself.
+            prior_options = ["— none —"] + [s for s in available_studies if s != selected_study]
+            st.sidebar.divider()
+            st.sidebar.markdown("**ChangeGuard — prior study (optional)**")
+            selected_prior_study = st.sidebar.selectbox(
+                "Select Prior Study",
+                prior_options,
+                index=0,
+                key="rsna_prior_study",
+                help="Select a prior study to compare image-derived features. Non-diagnostic.",
+            )
+
+            if selected_prior_study != "— none —" and available_planes:
+                try:
+                    prior_volume, prior_meta = load_rsna_study_series(
+                        rsna_root, metadata, selected_prior_study, selected_plane
+                    )
+                    prior_study_metadata = prior_meta
+                    st.sidebar.success(f"Prior study loaded ({selected_plane})")
+                except RSNAStudyNotAvailable as e:
+                    st.sidebar.warning(f"Prior study unavailable: {e}")
+                except Exception as e:
+                    st.sidebar.error(f"Error loading prior study: {e}")
     except RSNADiscoveryError as e:
         st.sidebar.error(f"RSNA discovery failed: {e}")
     except Exception as e:
@@ -333,6 +367,127 @@ if volume is not None:
 
                 except Exception as e:
                     st.error(f"Error generating decision report: {e}")
+
+            # ---- ChangeGuard comparison section -----------------------------
+            if (
+                selected_prior_study is not None
+                and selected_prior_study != "— none —"
+                and prior_volume is not None
+                and decision_report is not None
+            ):
+                st.divider()
+                with st.expander(
+                    "ChangeGuard comparison — non-diagnostic; clinician review required",
+                    expanded=True,
+                ):
+                    st.warning(
+                        "This section shows image-derived feature changes between two studies. "
+                        "It does not constitute a clinical finding, diagnosis, or medical opinion. "
+                        "Clinician review is required before any clinical action is taken."
+                    )
+                    try:
+                        # Process the prior study through the same pipeline.
+                        prior_is_mri = (prior_volume.format_type in ("DICOM", "NIFTI", "NUMPY"))
+                        prior_display_slice = prior_volume.get_display_slice(
+                            prior_volume.default_slice_index
+                        )
+                        prior_results = process_mri_image(
+                            prior_display_slice,
+                            segmentation_method=seg_method,
+                            is_mri=prior_is_mri,
+                            is_inverted=prior_volume.is_inverted,
+                        )
+                        prior_decision_report = generate_decision_report(
+                            study_uid=prior_study_metadata["study_uid"],
+                            series_uid=prior_study_metadata["series_uid"],
+                            plane=prior_study_metadata["plane"],
+                            volume_data=prior_volume.raw_data,
+                            preprocessed_data=prior_results["preprocessed"],
+                            mask=prior_results["mask"],
+                            features=prior_results["features"],
+                            num_slices=prior_study_metadata["num_slices"],
+                        )
+
+                        # Side-by-side overlay images.
+                        cg_col1, cg_col2 = st.columns(2)
+                        with cg_col1:
+                            st.markdown(f"**Prior study** — `{prior_study_metadata['study_uid']}`")
+                            prior_overlay = prior_results["overlay"]
+                            prior_overlay_rgb = (
+                                prior_overlay[..., ::-1]
+                                if len(prior_overlay.shape) == 3
+                                else prior_overlay
+                            )
+                            st.image(
+                                fit_panel_height(prior_overlay_rgb),
+                                caption=f"Quality: {prior_decision_report.quality_status.value}",
+                            )
+                        with cg_col2:
+                            st.markdown(f"**Current study** — `{study_metadata['study_uid']}`")
+                            curr_overlay = results["overlay"]
+                            curr_overlay_rgb = (
+                                curr_overlay[..., ::-1]
+                                if len(curr_overlay.shape) == 3
+                                else curr_overlay
+                            )
+                            st.image(
+                                fit_panel_height(curr_overlay_rgb),
+                                caption=f"Quality: {decision_report.quality_status.value}",
+                            )
+
+                        # Run the deterministic comparison.
+                        try:
+                            comparison = generate_comparison_report(
+                                prior=prior_decision_report,
+                                current=decision_report,
+                            )
+                        except ValueError as cmp_err:
+                            # INVALID quality blocks a meaningful comparison.
+                            st.error(
+                                f"ChangeGuard comparison cannot run: {cmp_err} "
+                                "Resolve the image-quality issue and reload the study."
+                            )
+                        else:
+                            status_icons = {
+                                ComparisonStatus.STABLE: "🟢 STABLE",
+                                ComparisonStatus.REVIEW: "🟡 REVIEW",
+                            }
+                            st.metric(
+                                "Comparison status",
+                                status_icons[comparison.status],
+                            )
+
+                            if comparison.reasons:
+                                st.markdown("**Change candidates requiring clinician review:**")
+                                for reason in comparison.reasons:
+                                    st.warning(reason)
+                            else:
+                                st.success(
+                                    "No image-derived change candidates detected above threshold. "
+                                    "This is not a clinical clearance."
+                                )
+
+                            # Auditable feature-delta table.
+                            st.markdown("**Auditable image-feature deltas (prior → current)**")
+                            delta_rows = [
+                                {
+                                    "Feature": d.feature,
+                                    "Prior": round(d.prior_value, 4),
+                                    "Current": round(d.current_value, 4),
+                                    "Δ (absolute)": round(d.absolute_change, 4),
+                                    "Δ (relative)": f"{d.relative_change * 100:.1f}%",
+                                }
+                                for d in comparison.feature_deltas
+                            ]
+                            st.dataframe(
+                                pd.DataFrame(delta_rows),
+                                use_container_width=True,
+                                hide_index=True,
+                            )
+
+                    except Exception as e:
+                        st.error(f"ChangeGuard processing error: {e}")
+
         else:
             # Preview before processing
             st.info("File loaded successfully. Click 'Process Image' in the sidebar to run analysis.")
