@@ -101,6 +101,40 @@ What the diagram means in the current implementation:
 
 The thresholds are named constants in `mri_core/decision.py`. Threshold segmentation is not medically validated.
 
+### MRI ChangeGuard — Deterministic Prior-vs-Current Comparison
+
+**ChangeGuard** is a deterministic, non-diagnostic feature that compares image-derived features between two RSNA knee MRI studies (prior vs current). It uses only classical image processing with no learned models — no training, no probabilities, no clinical claims.
+
+#### Workflow
+
+1. Select a current RSNA study and plane (Axial, Coronal, or Sagittal).
+2. Optionally select a distinct prior study from the same plane.
+3. Choose segmentation method (Otsu or Adaptive).
+4. Click **Process Image**.
+5. The ChangeGuard section expands below the deterministic quality report and displays:
+   - Side-by-side segmentation overlays (prior and current).
+   - Comparison status: **STABLE** (no change candidates above threshold) or **REVIEW** (change candidates detected).
+   - Named threshold reasons (foreground fraction shift, mean intensity shift, quality flags).
+   - Auditable feature-delta table with prior → current numeric changes.
+
+#### Outputs and Safety
+
+- **Quality gates:** Both studies must have OK or REVIEW quality; INVALID quality blocks the comparison (non-finite or corrupt data cannot produce a meaningful result).
+- **Deterministic thresholds:** Named constants (`FOREGROUND_FRACTION_REVIEW_THRESHOLD`, `MEAN_INTENSITY_REVIEW_THRESHOLD`, etc.) in `mri_core/comparison.py` are authoritative; no threshold tuning or hyperparameters are applied.
+- **Feature deltas:** Per-feature absolute and relative changes (mean intensity, std deviation, intensity range, foreground fraction, foreground pixels, largest contour area).
+- **Change candidates:** Reason strings explicitly label each as an image-derived change candidate requiring clinician review, not a clinical finding or diagnosis.
+- **Non-diagnostic:** This is research and educational only. Image-derived feature changes do not constitute a clinical comparison, and clinician review is required before any clinical action is taken.
+
+#### Local demo result
+
+A local ChangeGuard run (2026-09-26) using two downloaded RSNA knee MRI studies:
+- **Prior study:** Quality OK, image features extracted.
+- **Current study:** Quality OK, image features extracted.
+- **Comparison status:** **STABLE** — no image-derived change candidates detected above threshold.
+- **Outcome:** Both quality checks passed; the deterministic comparison completed successfully with zero REVIEW reasons.
+
+This demonstrates the end-to-end deterministic comparison pipeline in the Streamlit UI, including overlay rendering, quality gating, feature-delta calculation, and threshold evaluation.
+
 #### Experimental smoke checkpoint
 
 - **Purpose.** It exists only to validate the end-to-end software path: local study, model input, checkpoint loading, inference, `DecisionReport`, and Streamlit display.
@@ -312,6 +346,10 @@ With DICOM data attached later, the future commands are:
 ```
 
 The model reuses the V0.5 shared encoder with a 12-logit head and applies one sigmoid probability per target. Training uses study-level splitting, `BCEWithLogitsLoss`, the configured seed, CUDA when available, CPU otherwise, and best-checkpoint selection by macro ROC-AUC. Per-label ROC-AUC is reported when both validation classes are present; single-class validation labels are reported as unavailable instead of raising. Submission generation takes the exact column order and study IDs from `sample_submission.csv`. Source CSVs, DICOM directories, checkpoints, and generated submissions are ignored by Git.
+
+## Built with IBM Bob
+
+This project uses the IBM Bob (Building on Blocks) educational framework for AI/ML research and development, providing structured guidance on deterministic image processing, baseline metrics, and model validation best practices.
 
 ## V0.5 CNN experiment
 
