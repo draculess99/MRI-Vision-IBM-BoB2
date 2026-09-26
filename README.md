@@ -347,6 +347,36 @@ With DICOM data attached later, the future commands are:
 
 The model reuses the V0.5 shared encoder with a 12-logit head and applies one sigmoid probability per target. Training uses study-level splitting, `BCEWithLogitsLoss`, the configured seed, CUDA when available, CPU otherwise, and best-checkpoint selection by macro ROC-AUC. Per-label ROC-AUC is reported when both validation classes are present; single-class validation labels are reported as unavailable instead of raising. Submission generation takes the exact column order and study IDs from `sample_submission.csv`. Source CSVs, DICOM directories, checkpoints, and generated submissions are ignored by Git.
 
+## IBM Bob Evidence and Release Validation
+
+IBM Bob 2 was used to implement the ChangeGuard Release Check developer workflow:
+a cross-platform Python CLI, focused synthetic tests for its reporting logic, and
+documentation for the required validation sequence. The deterministic MRI comparison
+logic and its thresholds were not changed.
+
+### IBM Bob implementation evidence
+
+![IBM Bob task-session summary](docs/images/ibm-bob-release-validation/11-ibm-bob-session-summary.png)
+
+*IBM Bob task-session summary showing the scoped implementation of the ChangeGuard
+Release Check workflow and its validation outcome.*
+
+![IBM Bob implementation and code review](docs/images/ibm-bob-release-validation/09-ibm-bob-code-and-diff.png)
+
+*IBM Bob implementation evidence for the new release-check workflow, including the
+documentation-only scope and generated project files.*
+
+### Independent full-regression result
+
+![Full ChangeGuard release check passed](docs/images/ibm-bob-release-validation/16-release-check-full-passed.png)
+
+*Local execution of `changeguard_release_check.py --full`: 443 tests passed and
+9 optional tests were skipped. The release check does not modify clinical thresholds
+or make clinical conclusions.*
+
+The complete IBM Bob task-session and validation evidence set is available in
+[`docs/images/ibm-bob-release-validation/`](docs/images/ibm-bob-release-validation/).
+
 ## Built with IBM Bob
 
 This project uses the IBM Bob (Building on Blocks) educational framework for AI/ML research and development, providing structured guidance on deterministic image processing, baseline metrics, and model validation best practices.
